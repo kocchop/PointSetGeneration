@@ -20,7 +20,6 @@ def heatmap(x,normalize=True):
 	return cv2.merge([b,g,r])
 
 
-
 dists=[]
 
 if __name__ == "__main__":

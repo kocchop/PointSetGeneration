@@ -6,7 +6,7 @@ import tflearn
 import random
 import math
 import os
-os.system("chmod +w /unsullied/sharefs/wangmengdi/wangmengdi")
+# os.system("chmod +w /unsullied/sharefs/wangmengdi/wangmengdi")
 import time
 import zlib
 import socket
@@ -15,6 +15,8 @@ import Queue
 import sys
 import tf_nndistance
 import cPickle as pickle
+import cv2
+from PIL import Image
 
 from BatchFetcher import *
 
@@ -36,15 +38,16 @@ def stop_fetcher():
 def build_graph(resourceid):
 	with tf.device('/gpu:%d'%resourceid):
 		tflearn.init_graph(seed=1029,num_cores=2,gpu_memory_fraction=0.9,soft_placement=True)
-		img_inp=tf.placeholder(tf.float32,shape=(BATCH_SIZE,HEIGHT,WIDTH,4),name='img_inp')
+		img_inp=tf.placeholder(tf.float32,shape=(BATCH_SIZE,HEIGHT/2,WIDTH/2,4),name='img_inp')
 		pt_gt=tf.placeholder(tf.float32,shape=(BATCH_SIZE,POINTCLOUDSIZE,3),name='pt_gt')
 
 		x=img_inp
+		# x = tf.image.resize(img_inp,[96,128], method=ResizeMethod.BILINEAR, preserve_aspect_ratio=True)
 #192 256
 		x=tflearn.layers.conv.conv_2d(x,16,(3,3),strides=1,activation='relu',weight_decay=1e-5,regularizer='L2')
 		x=tflearn.layers.conv.conv_2d(x,16,(3,3),strides=1,activation='relu',weight_decay=1e-5,regularizer='L2')
 		x0=x
-		x=tflearn.layers.conv.conv_2d(x,32,(3,3),strides=2,activation='relu',weight_decay=1e-5,regularizer='L2')
+		x=tflearn.layers.conv.conv_2d(x,32,(3,3),strides=1,activation='relu',weight_decay=1e-5,regularizer='L2') #changed the stride from 2 to 1 for subsample train
 #96 128
 		x=tflearn.layers.conv.conv_2d(x,32,(3,3),strides=1,activation='relu',weight_decay=1e-5,regularizer='L2')
 		x=tflearn.layers.conv.conv_2d(x,32,(3,3),strides=1,activation='relu',weight_decay=1e-5,regularizer='L2')
@@ -169,7 +172,7 @@ def build_graph(resourceid):
 		batchnoinc=batchno.assign(batchno+1)
 	return img_inp,x,pt_gt,loss,optimizer,batchno,batchnoinc,mindist,loss_nodecay,dists_forward,dists_backward,dist0
 
-def main(resourceid,keyname):
+def main(resourceid,keyname,dumpdir):
 	if not os.path.exists(dumpdir):
 		os.system("mkdir -p %s"%dumpdir)
 	img_inp,x,pt_gt,loss,optimizer,batchno,batchnoinc,mindist,loss_nodecay,dists_forward,dists_backward,dist0=build_graph(resourceid)
@@ -179,7 +182,12 @@ def main(resourceid,keyname):
 	saver=tf.train.Saver()
 	with tf.Session(config=config) as sess,\
 				open('%s/%s.log'%(dumpdir,keyname),'a') as fout:
-		sess.run(tf.global_variables_initializer())
+		print "before run"
+		sess.run(tf.initialize_all_variables())
+	        writer = tf.summary.FileWriter(dumpdir)
+        	writer.add_graph(sess.graph)
+		#sess.run(tf.global_variables_initializer())
+		print "after run"
 		trainloss_accs=[0,0,0]
 		trainloss_acc0=1e-9
 		validloss_accs=[0,0,0]
@@ -191,7 +199,8 @@ def main(resourceid,keyname):
 		while bno<300000:
 			t0=time.time()
 			data,ptcloud,validating=fetch_batch()
-			t1=time.time()
+			# data = tf.image.resize_images(data,[96,128])# downsampling the input image, just by 2
+		        t1=time.time()
 			validating=validating[0]!=0
 			if not validating:
 				_,pred,total_loss,trainloss,trainloss1,trainloss2,distmap_0=sess.run([optimizer,x,loss,loss_nodecay,dists_forward,dists_backward,dist0],
@@ -201,6 +210,7 @@ def main(resourceid,keyname):
 				trainloss_accs[2]=trainloss_accs[2]*0.99+trainloss2
 				trainloss_acc0=trainloss_acc0*0.99+1
 			else:
+				print "in training"
 				_,pred,total_loss,validloss,validloss1,validloss2,distmap_0=sess.run([batchnoinc,x,loss,loss_nodecay,dists_forward,dists_backward,dist0],
 					feed_dict={img_inp:data,pt_gt:ptcloud})
 				validloss_accs[0]=validloss_accs[0]*0.997+validloss
@@ -222,11 +232,11 @@ def main(resourceid,keyname):
 			print >>fout,bno,trainloss_accs[0]/trainloss_acc0,trainloss_accs[1]/trainloss_acc0,trainloss_accs[2]/trainloss_acc0,showloss,showloss1,showloss2,validloss_accs[0]/validloss_acc0,validloss_accs[1]/validloss_acc0,validloss_accs[2]/validloss_acc0,total_loss-showloss
 			if bno%128==0:
 				fout.flush()
-			if time.time()-lastsave>900:
+			if time.time()-lastsave>1:
 				saver.save(sess,'%s/'%dumpdir+keyname+".ckpt")
 				lastsave=time.time()
 			print bno,'t',trainloss_accs[0]/trainloss_acc0,trainloss_accs[1]/trainloss_acc0,trainloss_accs[2]/trainloss_acc0,'v',validloss_accs[0]/validloss_acc0,validloss_accs[1]/validloss_acc0,validloss_accs[2]/validloss_acc0,total_loss-showloss,t1-t0,t2-t1,time.time()-t0,fetchworker.queue.qsize()
-		saver.save(sess,'%s/'%dumpdir+keyname+".ckpt") 
+        	saver.save(sess,'%s/'%dumpdir+keyname+".ckpt") 
 
 def dumppredictions(resourceid,keyname,valnum):
 	img_inp,x,pt_gt,loss,optimizer,batchno,batchnoinc,mindist,loss_nodecay,dists_forward,dists_backward,dist0=build_graph(resourceid)
@@ -280,7 +290,7 @@ if __name__=='__main__':
 	keyname=os.path.basename(__file__).rstrip('.py')
 	try:
 		if cmd=="train":
-			main(resourceid,keyname)
+			main(resourceid,keyname,dumpdir)
 		elif cmd=="predict":
 			dumppredictions(resourceid,keyname,valnum)
 		else:

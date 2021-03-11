@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import zlib
 import math
+import pickle
 
 BATCH_SIZE=32
 HEIGHT=192
@@ -9,6 +10,7 @@ WIDTH=256
 POINTCLOUDSIZE=16384
 OUTPUTPOINTS=1024
 REEBSIZE=1024
+DIV_FACTOR=4
 
 def loadBinFile(path):
 	binfile=zlib.decompress(open(path,'rb').read())
@@ -20,6 +22,9 @@ def loadBinFile(path):
 	rotmat=np.fromstring(binfile[p:p+BATCH_SIZE*3*3*4],dtype='float32').reshape((BATCH_SIZE,3,3))
 	p+=BATCH_SIZE*3*3*4
 	ptcloud=np.fromstring(binfile[p:p+BATCH_SIZE*POINTCLOUDSIZE*3],dtype='uint8').reshape((BATCH_SIZE,POINTCLOUDSIZE,3))
+    	ptcloud = ptcloud[:,0::DIV_FACTOR,:]
+    	with open('data.pkl','wb') as f:
+     		pickle.dump(ptcloud,f)
 	ptcloud=ptcloud.astype('float32')/255
 	beta=math.pi/180*20
 	viewmat=np.array([[

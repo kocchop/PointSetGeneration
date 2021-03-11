@@ -15,7 +15,7 @@ def onmouse(*args):
 cv2.namedWindow('show3d')
 cv2.moveWindow('show3d',0,0)
 cv2.setMouseCallback('show3d',onmouse)
-def showpoints(xyz,c0=None,c1=None,c2=None,waittime=0,showrot=False,magnifyBlue=0,freezerot=False,background=(0,0,0),normalizecolor=True):
+def showpoints(xyz,c0=None,c1=None,c2=None,waittime=0,showrot=True,magnifyBlue=0,freezerot=False,background=(0,0,0),normalizecolor=True):
 	global showsz,mousex,mousey,zoom,changed
 	xyz=xyz-xyz.mean(axis=0)
 	radius=((xyz**2).sum(axis=-1)**0.5).max()
@@ -71,9 +71,9 @@ def showpoints(xyz,c0=None,c1=None,c2=None,waittime=0,showrot=False,magnifyBlue=
 			if magnifyBlue>=2:
 				show[:,:,0]=np.maximum(show[:,:,0],np.roll(show[:,:,0],-1,axis=1))
 		if showrot:
-			cv2.putText(show,'xangle %d'%(int(xangle/np.pi*180)),(30,showsz-30),0,0.5,cv2.cv.CV_RGB(255,0,0))
-			cv2.putText(show,'yangle %d'%(int(yangle/np.pi*180)),(30,showsz-50),0,0.5,cv2.cv.CV_RGB(255,0,0))
-			cv2.putText(show,'zoom %d%%'%(int(zoom*100)),(30,showsz-70),0,0.5,cv2.cv.CV_RGB(255,0,0))
+			cv2.putText(show,'xangle %d'%(int(xangle/np.pi*180)),(30,showsz-30),0,1,(255,0,0),1)
+			cv2.putText(show,'yangle %d'%(int(yangle/np.pi*180)),(30,showsz-50),0,1,(255,0,0),1)
+			cv2.putText(show,'zoom %d%%'%(int(zoom*100)),(30,showsz-70),0,1,(255,0,0),1)
 	changed=True
 	while True:
 		if changed:

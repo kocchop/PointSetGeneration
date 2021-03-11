@@ -1,0 +1,8 @@
+*.pyc
+*.pkl
+*.nfs
+*save
+*.avi
+*.mat
+*logdir
+*data_analysis

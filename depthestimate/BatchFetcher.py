@@ -11,7 +11,9 @@ import threading
 import Queue
 import sys
 import cPickle as pickle
-import show3d
+import scipy.ndimage as ndi
+
+# import show3d
 
 FETCH_BATCH_SIZE=32
 BATCH_SIZE=32
@@ -35,7 +37,8 @@ class BatchFetcher(threading.Thread):
 			print "error! data file not exists: %s"%path
 			print "please KILL THIS PROGRAM otherwise it will bear undefined behaviors"
 			assert False,"data file not exists: %s"%path
-		binfile=zlib.decompress(open(path,'r').read())
+        
+	        binfile=zlib.decompress(open(path,'r').read())
 		p=0
 		color=np.fromstring(binfile[p:p+FETCH_BATCH_SIZE*HEIGHT*WIDTH*3],dtype='uint8').reshape((FETCH_BATCH_SIZE,HEIGHT,WIDTH,3))
 		p+=FETCH_BATCH_SIZE*HEIGHT*WIDTH*3
@@ -44,6 +47,7 @@ class BatchFetcher(threading.Thread):
 		rotmat=np.fromstring(binfile[p:p+FETCH_BATCH_SIZE*3*3*4],dtype='float32').reshape((FETCH_BATCH_SIZE,3,3))
 		p+=FETCH_BATCH_SIZE*3*3*4
 		ptcloud=np.fromstring(binfile[p:p+FETCH_BATCH_SIZE*POINTCLOUDSIZE*3],dtype='uint8').reshape((FETCH_BATCH_SIZE,POINTCLOUDSIZE,3))
+        	ptcloud[:,:,:2] = ptcloud[:,:,:2]/2 #downsampling pointcloud ground truth --> FFK
 		ptcloud=ptcloud.astype('float32')/255
 		beta=math.pi/180*20
 		viewmat=np.array([[
@@ -63,8 +67,10 @@ class BatchFetcher(threading.Thread):
 		data=np.zeros((FETCH_BATCH_SIZE,HEIGHT,WIDTH,4),dtype='float32')
 		data[:,:,:,:3]=color*(1/255.0)
 		data[:,:,:,3]=depth==0
+        	data = ndi.zoom(data, (1, 0.5, 0.5, 1), order=1) ## edit for image subsampling
 		validating=np.array([i[0]=='f' for i in keynames],dtype='float32')
 		return (data,ptcloud,validating)
+        
 	def run(self):
 		while self.bno<300000 and not self.stopped:
 			self.queue.put(self.work(self.bno%300000))
@@ -87,15 +93,15 @@ if __name__=='__main__':
 		data,ptcloud,validating = fetchworker.fetch()
 		validating = validating[0]!=0
 		assert len(data)==FETCH_BATCH_SIZE
-		for i in range(len(data)):
-			cv2.imshow('data',data[i])
-			while True:
-				cmd=show3d.showpoints(ptcloud[i])
-				if cmd==ord(' '):
-					break
-				elif cmd==ord('q'):
-					break
-			if cmd==ord('q'):
-				break
+		# for i in range(len(data)):
+			# cv2.imshow('data',data[i])
+			# while True:
+				# cmd=show3d.showpoints(ptcloud[i])
+				# if cmd==ord(' '):
+					# break
+				# elif cmd==ord('q'):
+					# break
+			# if cmd==ord('q'):
+				# break
 
 
